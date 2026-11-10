@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Configurazione · OPNsense Monitor</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#1c2330;--muted:#667085;--line:#e3e6ea;--accent:#d94f00;--ok:#168a4a;--err:#c0262d}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--fg:#e6e9ee;--muted:#8b94a3;--line:#2b323d;--accent:#ff7a33;--ok:#4cc486;--err:#ff6b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+p.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px}
+h2{font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+label{display:block;font-weight:600;font-size:13px;margin:12px 0 4px}
+input[type=text],input[type=password],input[type=number],select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:inherit}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.hint{color:var(--muted);font-size:12.5px;margin-top:4px}
+.check{display:flex;gap:8px;align-items:center;font-weight:400;margin-top:14px}
+button{font:inherit;font-weight:600;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px}
+.msg{margin-top:12px;font-size:14px}.msg.ok{color:var(--ok)}.msg.err{color:var(--err)}
+.if{display:grid;grid-template-columns:auto 1fr 110px;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.if:first-of-type{border-top:0}
+.if small{color:var(--muted)}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Configurazione OPNsense Monitor</h1>
+  <p class="sub">Collega il monitor al tuo router e scegli quali interfacce misurare.</p>
+
+  <div class="card">
+    <h2>1 · Router</h2>
+    <label for="host">Indirizzo IP o hostname</label>
+    <input id="host" type="text" placeholder="192.168.1.1" autocomplete="off">
+    <div class="hint">Puoi indicare anche porta o schema, es. <code>https://192.168.1.1:8443</code></div>
+    <label for="key">API key</label>
+    <input id="key" type="text" autocomplete="off">
+    <label for="secret">API secret</label>
+    <input id="secret" type="password" autocomplete="new-password">
+    <div class="hint" id="secretHint">In OPNsense: <em>Sistema → Accesso → Utenti</em> → crea una chiave API per un utente con il privilegio <em>Diagnostics: Traffic</em> (o <em>Diagnostics: Interface Statistics</em>).</div>
+    <label class="check"><input id="verify" type="checkbox"> Verifica il certificato TLS (disattiva se il router usa un certificato autofirmato)</label>
+    <div class="row">
+      <button id="load" class="primary">Connetti e carica interfacce</button>
+    </div>
+    <div id="m1" class="msg"></div>
+  </div>
+
+  <div class="card" id="step2" hidden>
+    <h2>2 · Interfacce</h2>
+    <div class="hint" style="margin:-6px 0 8px">Spunta le interfacce da monitorare e assegna il ruolo. I consumi vengono sommati per ruolo (WAN / LAN).</div>
+    <div id="ifs"></div>
+    <label for="poll">Intervallo di lettura (secondi)</label>
+    <input id="poll" type="number" min="5" max="600" value="30">
+    <div class="row">
+      <button id="save" class="primary">Salva e avvia</button>
+      <a href="/" id="back" hidden>Torna alla dashboard</a>
+    </div>
+    <div id="m2" class="msg"></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let existing = null;
+
+function msg(id, text, cls) { const e = $(id); e.textContent = text || ''; e.className = 'msg ' + (cls || ''); }
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'Errore');
+  return j;
+}
+function creds() {
+  return { host: $('host').value, apiKey: $('key').value, apiSecret: $('secret').value, verifyTls: $('verify').checked };
+}
+function guessRole(i) {
+  const s = (i.id + ' ' + i.name).toLowerCase();
+  return s.includes('wan') ? 'wan' : 'lan';
+}
+function renderInterfaces(list) {
+  const box = $('ifs'); box.innerHTML = '';
+  for (const i of list) {
+    const prev = existing && existing.interfaces.find((x) => x.id === i.id);
+    const row = document.createElement('div'); row.className = 'if'; row.dataset.id = i.id; row.dataset.name = i.name;
+    const cb = document.createElement('input'); cb.type = 'checkbox';
+    cb.checked = prev ? true : (!existing && /wan|lan/i.test(i.id + i.name));
+    const lab = document.createElement('div');
+    lab.innerHTML = '<strong></strong> <small></small>';
+    lab.querySelector('strong').textContent = i.name;
+    lab.querySelector('small').textContent = `(${i.id}${i.device ? ' · ' + i.device : ''})`;
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="wan">WAN</option><option value="lan">LAN</option>';
+    sel.value = prev ? prev.role : guessRole(i);
+    row.append(cb, lab, sel); box.append(row);
+  }
+  $('step2').hidden = false;
+}
+
+$('load').onclick = async () => {
+  msg('m1', 'Connessione in corso…');
+  $('load').disabled = true;
+  try {
+    const { interfaces } = await api('/api/interfaces', creds());
+    msg('m1', `Connesso. Trovate ${interfaces.length} interfacce.`, 'ok');
+    renderInterfaces(interfaces);
+  } catch (e) { msg('m1', e.message, 'err'); }
+  $('load').disabled = false;
+};
+
+$('save').onclick = async () => {
+  const interfaces = [...document.querySelectorAll('.if')].filter((r) => r.querySelector('input').checked)
+    .map((r) => ({ id: r.dataset.id, name: r.dataset.name, role: r.querySelector('select').value }));
+  if (!interfaces.length) return msg('m2', 'Seleziona almeno un\'interfaccia', 'err');
+  $('save').disabled = true; msg('m2', 'Salvataggio…');
+  try {
+    await api('/api/config', { ...creds(), interfaces, pollSeconds: $('poll').value });
+    msg('m2', 'Configurazione salvata. Reindirizzamento…', 'ok');
+    setTimeout(() => (location.href = '/'), 800);
+  } catch (e) { msg('m2', e.message, 'err'); }
+  $('save').disabled = false;
+};
+
+(async () => {
+  try {
+    const c = await api('/api/config');
+    if (c.configured) {
+      existing = c;
+      $('host').value = c.host; $('key').value = c.apiKey; $('verify').checked = !!c.verifyTls;
+      $('poll').value = c.pollSeconds;
+      $('secret').placeholder = '•••••••• (lascia vuoto per mantenere)';
+      $('back').hidden = false;
+      renderInterfaces(c.interfaces.map((i) => ({ id: i.id, name: i.name, device: '' })));
+      $('load').textContent = 'Ricarica interfacce dal router';
+    }
+  } catch {}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+services:
+  opnsense-monitor:
+    build: .
+    image: opnsense-monitor:latest
+    container_name: opnsense-monitor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      TZ: Europe/Rome
+    volumes:
+      - monitor-data:/data
+
+volumes:
+  monitor-data:
