@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OPNsense Monitor</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--fg:#1c2330;--muted:#667085;--line:#e3e6ea;--wan:#d94f00;--lan:#2563c9;--ok:#168a4a;--err:#c0262d}
+@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--fg:#e6e9ee;--muted:#8b94a3;--line:#2b323d;--wan:#ff7a33;--lan:#5b9bff;--ok:#4cc486;--err:#ff6b72}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;max-width:1100px;margin:0 auto;padding:18px 16px 6px}
+h1{font-size:20px;margin:0}
+.stat{font-size:13px;color:var(--muted)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}
+main{max-width:1100px;margin:0 auto;padding:8px 16px 48px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.kpi .t{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.kpi .v{font-size:26px;font-weight:700;margin:2px 0}
+.kpi .s{font-size:12.5px;color:var(--muted)}
+.kpi.wan{border-top:3px solid var(--wan)}.kpi.lan{border-top:3px solid var(--lan)}
+.bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{font:inherit;padding:6px 14px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.tabs button:first-child{border-radius:8px 0 0 8px}.tabs button:last-child{border-radius:0 8px 8px 0}.tabs button+button{border-left:0}
+.tabs button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.sp{flex:1}
+a.btn{font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:8px;background:var(--card)}
+a.btn:hover{color:var(--fg)}
+.legend{display:flex;gap:16px;font-size:13px;margin:4px 0 8px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+#chart{width:100%;height:300px;display:block}
+#tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--bg);padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;display:none;z-index:5;white-space:nowrap}
+.tw{overflow-x:auto;max-height:420px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:600;font-size:12px}
+.w{color:var(--wan)}.l{color:var(--lan)}
+.err{color:var(--err)}
+.empty{padding:40px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>OPNsense · Consumo dati</h1>
+  <div class="stat"><span id="dot" class="dot"></span><span id="st">…</span> · <a href="/setup.html" style="color:inherit">Impostazioni</a></div>
+</header>
+<main>
+  <section class="kpis" id="kpis"></section>
+
+  <section class="card">
+    <div class="bar">
+      <div class="tabs" id="tabs">
+        <button data-p="hour" class="on">Orario</button><button data-p="day">Giornaliero</button><button data-p="month">Mensile</button>
+      </div>
+      <span class="sp"></span>
+      <a class="btn" href="/api/export.csv">Esporta CSV</a>
+    </div>
+    <div class="legend" id="legend"></div>
+    <svg id="chart"></svg>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <div class="tw"><table id="tbl"></table></div>
+  </section>
+</main>
+<div id="tip"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const COL = { wan: 'var(--wan)', lan: 'var(--lan)' };
+const NAMES = { wan: 'WAN', lan: 'LAN' };
+let period = 'hour', data = null;
+
+function fmt(b) {
+  if (!b) return '0 B';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0;
+  while (b >= 1000 && i < u.length - 1) { b /= 1000; i++; }
+  return b.toFixed(b >= 100 || i === 0 ? 0 : b >= 10 ? 1 : 2) + ' ' + u[i];
+}
+const sum = (v) => v[0] + v[1];
+
+// sum per role (wan / lan) for every bucket: [rx, tx]
+function roleSeries(d) {
+  const out = { wan: d.labels.map(() => [0, 0]), lan: d.labels.map(() => [0, 0]) };
+  for (const ifc of d.interfaces) d.ifaces[ifc.id].forEach((v, i) => { out[ifc.role][i][0] += v[0]; out[ifc.role][i][1] += v[1]; });
+  return out;
+}
+function roleTotals(t, d) {
+  const o = { wan: [0, 0], lan: [0, 0] };
+  for (const ifc of d.interfaces) { const v = t[ifc.id] || [0, 0]; o[ifc.role][0] += v[0]; o[ifc.role][1] += v[1]; }
+  return o;
+}
+function label(k) {
+  if (period === 'hour') return k.slice(8, 10) + '/' + k.slice(5, 7) + ' ' + k.slice(11) + ':00';
+  if (period === 'day') return k.slice(8, 10) + '/' + k.slice(5, 7) + '/' + k.slice(0, 4);
+  return ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'][+k.slice(5, 7) - 1] + ' ' + k.slice(0, 4);
+}
+function short(k) {
+  if (period === 'hour') return k.slice(11) + 'h';
+  if (period === 'day') return k.slice(8, 10) + '/' + k.slice(5, 7);
+  return k.slice(5, 7) + '/' + k.slice(2, 4);
+}
+
+function renderKpis(d, roles) {
+  const rows = [['Ora corrente', d.totals.hour], ['Oggi', d.totals.today], ['Questo mese', d.totals.month]];
+  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
+  let h = '';
+  for (const r of present) for (const [name, t] of rows.slice(1)) {
+    const v = roleTotals(t, d)[r];
+    h += `<div class="card kpi ${r}"><div class="t">${NAMES[r]} · ${name}</div><div class="v">${fmt(sum(v))}</div><div class="s">↓ ${fmt(v[0])} ricevuti · ↑ ${fmt(v[1])} inviati</div></div>`;
+  }
+  $('kpis').innerHTML = h;
+}
+
+function renderChart(d, roles) {
+  const svg = $('chart'); const W = svg.clientWidth || 800, H = 300;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const rs = roleSeries(d);
+  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
+  $('legend').innerHTML = present.map((r) => `<span><i style="background:${COL[r]}"></i>${NAMES[r]}</span>`).join('');
+  const m = { l: 56, r: 8, t: 8, b: 26 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const max = Math.max(1, ...present.flatMap((r) => rs[r].map(sum)));
+  // nice scale
+  const step = niceStep(max / 4); const top = Math.ceil(max / step) * step;
+  let s = '';
+  for (let v = 0; v <= top + 1; v += step) {
+    const y = m.t + ih - (v / top) * ih;
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${m.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(v)}</text>`;
+  }
+  const n = d.labels.length, gw = iw / n, bw = Math.max(1, Math.min(28, (gw * 0.8) / present.length));
+  const every = Math.ceil(n / Math.max(1, Math.floor(iw / 48)));
+  d.labels.forEach((k, i) => {
+    const x0 = m.l + i * gw + (gw - bw * present.length) / 2;
+    present.forEach((r, j) => {
+      const v = sum(rs[r][i]), h = (v / top) * ih;
+      s += `<rect x="${x0 + j * bw}" y="${m.t + ih - h}" width="${Math.max(1, bw - 1)}" height="${h}" rx="2" fill="${COL[r]}"/>`;
+    });
+    if (i % every === 0) s += `<text x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${short(k)}</text>`;
+    s += `<rect data-i="${i}" x="${m.l + i * gw}" y="${m.t}" width="${gw}" height="${ih}" fill="transparent"/>`;
+  });
+  svg.innerHTML = s;
+  const tip = $('tip');
+  svg.onmousemove = (e) => {
+    const el = e.target.dataset && e.target.dataset.i; if (el === undefined) return (tip.style.display = 'none');
+    const i = +el;
+    tip.innerHTML = `<b>${label(d.labels[i])}</b>` + present.map((r) => `<br>${NAMES[r]}: ${fmt(sum(rs[r][i]))} (↓ ${fmt(rs[r][i][0])} ↑ ${fmt(rs[r][i][1])})`).join('');
+    tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = e.clientY + 14 + 'px';
+  };
+  svg.onmouseleave = () => (tip.style.display = 'none');
+}
+function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x || 1))); const f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+
+function renderTable(d, roles) {
+  const rs = roleSeries(d);
+  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
+  let h = '<thead><tr><th>Periodo</th>' + present.map((r) => `<th class="${r[0]}">${NAMES[r]} ↓ rx</th><th class="${r[0]}">${NAMES[r]} ↑ tx</th><th class="${r[0]}">${NAMES[r]} totale</th>`).join('') + '</tr></thead><tbody>';
+  for (let i = d.labels.length - 1; i >= 0; i--) {
+    h += `<tr><td>${label(d.labels[i])}</td>` + present.map((r) => `<td>${fmt(rs[r][i][0])}</td><td>${fmt(rs[r][i][1])}</td><td><b>${fmt(sum(rs[r][i]))}</b></td>`).join('') + '</tr>';
+  }
+  $('tbl').innerHTML = h + '</tbody>';
+}
+
+async function load() {
+  try {
+    const r = await fetch('/api/stats?period=' + period);
+    if (r.status === 409) return (location.href = '/setup.html');
+    data = await r.json();
+    const roles = ['wan', 'lan'];
+    renderKpis(data, roles); renderChart(data, roles); renderTable(data, roles);
+    const s = data.status;
+    $('dot').className = 'dot ' + (s.lastError ? 'err' : 'ok');
+    $('st').textContent = s.lastError ? 'Errore: ' + s.lastError : 'Ultima lettura ' + new Date(s.lastPoll || Date.now()).toLocaleTimeString('it-IT');
+  } catch (e) { $('st').textContent = 'Server non raggiungibile'; $('dot').className = 'dot err'; }
+}
+$('tabs').onclick = (e) => {
+  if (!e.target.dataset.p) return;
+  period = e.target.dataset.p;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b === e.target));
+  load();
+};
+addEventListener('resize', () => data && renderChart(data, ['wan', 'lan']));
+load(); setInterval(load, 30000);
+</script>
+</body>
+</html>
