@@ -4,68 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>OPNsense Monitor</title>
+<link rel="stylesheet" href="/style.css">
 <style>
-:root{--bg:#f4f5f7;--card:#fff;--fg:#1c2330;--muted:#667085;--line:#e3e6ea;--wan:#d94f00;--lan:#2563c9;--ok:#168a4a;--err:#c0262d}
-@media (prefers-color-scheme:dark){:root{--bg:#12151b;--card:#1b2029;--fg:#e6e9ee;--muted:#8b94a3;--line:#2b323d;--wan:#ff7a33;--lan:#5b9bff;--ok:#4cc486;--err:#ff6b72}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;max-width:1100px;margin:0 auto;padding:18px 16px 6px}
-h1{font-size:20px;margin:0}
-.stat{font-size:13px;color:var(--muted)}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px}
-.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}
-main{max-width:1100px;margin:0 auto;padding:8px 16px 48px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-.kpi .t{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-.kpi .v{font-size:26px;font-weight:700;margin:2px 0}
-.kpi .s{font-size:12.5px;color:var(--muted)}
-.kpi.wan{border-top:3px solid var(--wan)}.kpi.lan{border-top:3px solid var(--lan)}
-.bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.tabs button,.seg button{font:inherit;padding:6px 14px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
-.tabs button:first-child,.seg button:first-child{border-radius:8px 0 0 8px}.tabs button:last-child,.seg button:last-child{border-radius:0 8px 8px 0}.tabs button+button,.seg button+button{border-left:0}
-.tabs button.on,.seg button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+header,main{max-width:1180px;margin:0 auto;padding-left:16px;padding-right:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-top:22px;padding-bottom:10px}
+.prompt{font-size:18px;font-weight:700;letter-spacing:.01em}
+.prompt .u{color:var(--ok)}.prompt .p{color:var(--accent)}
+.cursor{display:inline-block;width:.6em;color:var(--accent);animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.stat{font-size:12.5px;color:var(--muted)}
+.stat a{color:inherit}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-right:6px;vertical-align:middle}
+.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.err{background:var(--err);box-shadow:0 0 8px var(--err)}
+main{padding-bottom:56px}
+
+/* KPI: card con tilt 3D */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin:10px 0 24px;perspective:1100px}
+.kpi{position:relative;padding:16px 18px 15px;transform-style:preserve-3d;transition:transform .18s ease-out;will-change:transform;overflow:hidden}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c,var(--accent));box-shadow:0 0 14px var(--c,var(--accent))}
+.kpi::after{ /* riflesso che segue il mouse */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(260px circle at var(--mx,50%) var(--my,0%),rgba(255,255,255,.09),transparent 55%)
+}
+.kpi .t{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);transform:translateZ(14px)}
+.kpi .v{font-size:28px;font-weight:700;margin:3px 0 1px;color:var(--c,var(--accent));text-shadow:0 0 18px color-mix(in srgb,var(--c,var(--accent)) 55%,transparent);transform:translateZ(34px);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi .s{font-size:12px;color:var(--muted);transform:translateZ(10px)}
+.kpi.wan{--c:var(--wan)}.kpi.lan{--c:var(--lan)}.kpi.up{--c:var(--ok)}
+
+.panel{padding:18px 18px 14px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.seg{display:inline-flex}
+.seg button{border-radius:0;padding:6px 14px;box-shadow:none;border-right-width:0}
+.seg button:first-child{border-radius:8px 0 0 8px}
+.seg button:last-child{border-radius:0 8px 8px 0;border-right-width:1px}
+.seg button.on{color:#021018;background:linear-gradient(180deg,#38f0ff,#00b8d4);border-color:#7df6ff}
 .sp{flex:1}
-a.btn{font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:8px;background:var(--card)}
-a.btn:hover{color:var(--fg)}
-.legend{display:flex;gap:16px;font-size:13px;margin:4px 0 8px}
-.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
-#chart{width:100%;height:300px;display:block}
-#tip{position:fixed;pointer-events:none;background:var(--fg);color:var(--bg);padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;display:none;z-index:5;white-space:nowrap}
-.tw{overflow-x:auto;max-height:420px;overflow-y:auto}
-table{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.btn.small{padding:6px 12px;font-size:13px}
+.legend{display:flex;gap:18px;font-size:12.5px;margin:2px 0 6px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;box-shadow:0 0 8px currentColor}
+
+/* grafico inclinato in prospettiva */
+.stage{perspective:1400px;padding:4px 0 2px}
+#chart{width:100%;height:320px;display:block;transform:rotateX(7deg);transform-origin:50% 100%;overflow:visible}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+.grow{transform-box:fill-box;transform-origin:50% 100%;animation:grow .55s cubic-bezier(.2,.8,.2,1) both}
+@keyframes draw{from{opacity:0}to{opacity:1}}
+.fade{animation:draw .6s ease both}
+
+#tip{position:fixed;pointer-events:none;background:rgba(6,10,18,.94);color:var(--fg);border:1px solid rgba(0,229,255,.35);box-shadow:0 8px 30px rgba(0,0,0,.6),0 0 18px rgba(0,229,255,.15);padding:9px 12px;border-radius:8px;font-size:12px;line-height:1.6;display:none;z-index:60;white-space:nowrap}
+#tip b{color:var(--accent)}
+
+.tw{overflow:auto;max-height:420px}
+table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
 th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
 th:first-child,td:first-child{text-align:left}
-th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:600;font-size:12px}
+th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+tbody tr:hover{background:rgba(0,229,255,.05)}
 .w{color:var(--wan)}.l{color:var(--lan)}
-.err{color:var(--err)}
-.empty{padding:40px;text-align:center;color:var(--muted)}
 </style>
 </head>
 <body>
 <header>
-  <h1>OPNsense · Consumo dati</h1>
-  <div class="stat"><span id="dot" class="dot"></span><span id="st">…</span> · <a href="/setup.html" style="color:inherit">Impostazioni</a></div>
+  <div class="prompt"><span class="u">root@opnsense</span>:<span class="p">~</span># traffic --watch<span class="cursor">▍</span></div>
+  <div class="stat"><span id="dot" class="dot"></span><span id="st">…</span> · <a href="/setup.html">impostazioni</a></div>
 </header>
 <main>
   <section class="kpis" id="kpis"></section>
 
-  <section class="card">
+  <section class="slab panel">
     <div class="bar">
-      <div class="tabs" id="tabs">
+      <div class="seg" id="tabs" role="group" aria-label="Periodo">
         <button data-p="hour" class="on">Orario</button><button data-p="day">Giornaliero</button><button data-p="month">Mensile</button>
       </div>
       <span class="sp"></span>
       <div class="seg" id="ctype" role="group" aria-label="Tipo di grafico">
         <button data-t="bar" class="on">Colonne</button><button data-t="line">Linee</button>
       </div>
-      <a class="btn" href="/api/export.csv">Esporta CSV</a>
+      <a class="btn small" href="/api/export.csv">CSV</a>
     </div>
     <div class="legend" id="legend"></div>
-    <svg id="chart"></svg>
+    <div class="stage"><svg id="chart" role="img" aria-label="Grafico dei consumi"></svg></div>
   </section>
 
-  <section class="card" style="margin-top:16px">
+  <section class="slab panel" style="margin-top:22px">
     <div class="tw"><table id="tbl"></table></div>
   </section>
 </main>
@@ -74,7 +95,9 @@ th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:6
 const $ = (id) => document.getElementById(id);
 const COL = { wan: 'var(--wan)', lan: 'var(--lan)' };
 const NAMES = { wan: 'WAN', lan: 'LAN' };
-let period = 'hour', data = null, chartType = 'bar';
+const ROLES = ['wan', 'lan'];
+let period = 'hour', data = null, chartType = 'bar', animate = true;
+let uptimeBase = null; // { sec, at }
 try { if (localStorage.getItem('chartType') === 'line') chartType = 'line'; } catch {}
 
 function fmt(b) {
@@ -84,8 +107,8 @@ function fmt(b) {
   return b.toFixed(b >= 100 || i === 0 ? 0 : b >= 10 ? 1 : 2) + ' ' + u[i];
 }
 const sum = (v) => v[0] + v[1];
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// sum per role (wan / lan) for every bucket: [rx, tx]
 function roleSeries(d) {
   const out = { wan: d.labels.map(() => [0, 0]), lan: d.labels.map(() => [0, 0]) };
   for (const ifc of d.interfaces) d.ifaces[ifc.id].forEach((v, i) => { out[ifc.role][i][0] += v[0]; out[ifc.role][i][1] += v[1]; });
@@ -96,6 +119,7 @@ function roleTotals(t, d) {
   for (const ifc of d.interfaces) { const v = t[ifc.id] || [0, 0]; o[ifc.role][0] += v[0]; o[ifc.role][1] += v[1]; }
   return o;
 }
+const presentRoles = (d) => ROLES.filter((r) => d.interfaces.some((i) => i.role === r));
 function label(k) {
   if (period === 'hour') return k.slice(8, 10) + '/' + k.slice(5, 7) + ' ' + k.slice(11) + ':00';
   if (period === 'day') return k.slice(8, 10) + '/' + k.slice(5, 7) + '/' + k.slice(0, 4);
@@ -107,67 +131,129 @@ function short(k) {
   return k.slice(5, 7) + '/' + k.slice(2, 4);
 }
 
-function renderKpis(d, roles) {
-  const rows = [['Ora corrente', d.totals.hour], ['Oggi', d.totals.today], ['Questo mese', d.totals.month]];
-  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
-  let h = '';
-  for (const r of present) for (const [name, t] of rows.slice(1)) {
+/* ---------- uptime ---------- */
+function fmtUptime(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const g = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const p = (n) => String(n).padStart(2, '0');
+  return (g ? g + 'g ' : '') + `${p(h)}:${p(m)}:${p(s)}`;
+}
+function uptimeCard(d) {
+  const sys = d.status.system;
+  if (!sys) {
+    return `<div class="slab kpi up tilt"><div class="t">Uptime router</div><div class="v">n/d</div><div class="s">${esc(d.status.systemError || 'non disponibile')}</div></div>`;
+  }
+  const sub = [sys.loadavg && 'load ' + sys.loadavg, sys.boottime && 'avvio ' + sys.boottime].filter(Boolean).join(' · ');
+  return `<div class="slab kpi up tilt"><div class="t">Uptime router</div><div class="v" id="uptime">${sys.seconds == null ? esc(sys.uptime || 'n/d') : fmtUptime(sys.seconds)}</div><div class="s">${esc(sub || ' ')}</div></div>`;
+}
+setInterval(() => {
+  const el = $('uptime'); if (!el || !uptimeBase) return;
+  el.textContent = fmtUptime(uptimeBase.sec + (performance.now() - uptimeBase.at) / 1000);
+}, 1000);
+
+/* ---------- KPI ---------- */
+function renderKpis(d) {
+  let h = uptimeCard(d);
+  for (const r of presentRoles(d)) for (const [name, t] of [['oggi', d.totals.today], ['questo mese', d.totals.month]]) {
     const v = roleTotals(t, d)[r];
-    h += `<div class="card kpi ${r}"><div class="t">${NAMES[r]} · ${name}</div><div class="v">${fmt(sum(v))}</div><div class="s">↓ ${fmt(v[0])} ricevuti · ↑ ${fmt(v[1])} inviati</div></div>`;
+    h += `<div class="slab kpi ${r} tilt"><div class="t">${NAMES[r]} · ${name}</div><div class="v">${fmt(sum(v))}</div><div class="s">↓ ${fmt(v[0])} rx · ↑ ${fmt(v[1])} tx</div></div>`;
   }
   $('kpis').innerHTML = h;
 }
+// tilt 3D che segue il mouse (delegato, sopravvive ai re-render)
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+$('kpis').addEventListener('pointermove', (e) => {
+  const c = e.target.closest('.tilt'); if (!c || reduce) return;
+  const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  c.style.transform = `rotateY(${((x - .5) * 14).toFixed(2)}deg) rotateX(${((.5 - y) * 12).toFixed(2)}deg) translateZ(8px)`;
+  c.style.setProperty('--mx', (x * 100) + '%'); c.style.setProperty('--my', (y * 100) + '%');
+});
+$('kpis').addEventListener('pointerout', (e) => { const c = e.target.closest('.tilt'); if (c && !c.contains(e.relatedTarget)) c.style.transform = ''; });
 
-function renderChart(d, roles) {
-  const svg = $('chart'); const W = svg.clientWidth || 800, H = 300;
+/* ---------- grafico 3D ---------- */
+function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x || 1))); const f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+const f1 = (n) => n.toFixed(1);
+
+function box(x, y, w, h, d, color, cls) { // parallelepipedo isometrico
+  if (h < 0.5) return '';
+  return `<g class="${cls}" fill="${color}">`
+    + `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(h)}"/>`
+    + `<polygon points="${f1(x)},${f1(y)} ${f1(x + d)},${f1(y - d)} ${f1(x + w + d)},${f1(y - d)} ${f1(x + w)},${f1(y)}" style="filter:brightness(1.55)"/>`
+    + `<polygon points="${f1(x + w)},${f1(y)} ${f1(x + w + d)},${f1(y - d)} ${f1(x + w + d)},${f1(y + h - d)} ${f1(x + w)},${f1(y + h)}" style="filter:brightness(.62)"/>`
+    + `</g>`;
+}
+
+function renderChart(d) {
+  const svg = $('chart'); const W = svg.clientWidth || 800, H = 320;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  const rs = roleSeries(d);
-  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
-  $('legend').innerHTML = present.map((r) => `<span><i style="background:${COL[r]}"></i>${NAMES[r]}</span>`).join('');
-  const m = { l: 56, r: 8, t: 8, b: 26 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const rs = roleSeries(d), present = presentRoles(d);
+  $('legend').innerHTML = present.map((r) => `<span><i style="background:${COL[r]};color:${COL[r]}"></i>${NAMES[r]}</span>`).join('');
+  const D = 16; // profondità del "palcoscenico"
+  const m = { l: 58, r: 10 + D, t: 8 + D, b: 28 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const base = m.t + ih;
   const max = Math.max(1, ...present.flatMap((r) => rs[r].map(sum)));
-  // nice scale
-  const step = niceStep(max / 4); const top = Math.ceil(max / step) * step;
-  let s = '';
+  const step = niceStep(max / 4), top = Math.ceil(max / step) * step;
+  const yOf = (v) => base - (v / top) * ih;
+  let s = `<defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`
+    + `<radialGradient id="orb" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".45" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#000" stop-opacity=".35"/></radialGradient></defs>`;
+  // pavimento + parete di fondo
+  s += `<polygon points="${m.l},${base} ${m.l + D},${base - D} ${W - m.r + D},${base - D} ${W - m.r},${base}" fill="rgba(0,229,255,.07)" stroke="rgba(0,229,255,.22)"/>`;
+  s += `<line x1="${m.l}" y1="${base}" x2="${m.l + D}" y2="${base - D}" stroke="rgba(0,229,255,.3)"/><line x1="${m.l + D}" y1="${base - D}" x2="${m.l + D}" y2="${m.t - D + (H - m.t - m.b - ih)}" stroke="rgba(0,229,255,.18)"/>`;
   for (let v = 0; v <= top + 1; v += step) {
-    const y = m.t + ih - (v / top) * ih;
-    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${m.l - 6}" y="${y + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${fmt(v)}</text>`;
+    const y = yOf(v);
+    s += `<polyline points="${m.l},${f1(y)} ${m.l + D},${f1(y - D)} ${W - m.r + D},${f1(y - D)}" fill="none" stroke="rgba(120,160,220,.16)"/>`
+      + `<text x="${m.l - 8}" y="${f1(y + 4)}" text-anchor="end" font-size="10.5" fill="var(--muted)">${fmt(v)}</text>`;
   }
-  const n = d.labels.length, gw = iw / n, bw = Math.max(1, Math.min(28, (gw * 0.8) / present.length));
-  const every = Math.ceil(n / Math.max(1, Math.floor(iw / 48)));
-  if (chartType === 'line') {
-    for (const r of present) {
-      const pts = rs[r].map((v, i) => `${(m.l + i * gw + gw / 2).toFixed(1)},${(m.t + ih - (sum(v) / top) * ih).toFixed(1)}`);
-      s += `<polyline points="${pts.join(' ')}" fill="none" stroke="${COL[r]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
-      if (n <= 60) pts.forEach((p) => { const [x, y] = p.split(','); s += `<circle cx="${x}" cy="${y}" r="3" fill="${COL[r]}"/>`; });
-    }
+  const n = d.labels.length, gw = iw / n;
+  const every = Math.ceil(n / Math.max(1, Math.floor(iw / 52)));
+  const anim = animate;
+  if (chartType === 'bar') {
+    const bw = Math.max(2, Math.min(26, (gw * 0.78) / present.length)), dd = Math.min(10, bw * 0.55);
+    d.labels.forEach((k, i) => {
+      const x0 = m.l + i * gw + (gw - bw * present.length) / 2;
+      present.forEach((r, j) => {
+        const v = sum(rs[r][i]);
+        s += box(x0 + j * bw, yOf(v), Math.max(1.5, bw - 1.5), base - yOf(v), dd, COL[r], anim ? 'grow' : '');
+      });
+    });
+  } else {
+    const pts = (r, dx = 0, dy = 0) => rs[r].map((v, i) => [m.l + i * gw + gw / 2 + dx, yOf(sum(v)) + dy]);
+    const P = (a) => a.map((p) => f1(p[0]) + ',' + f1(p[1])).join(' ');
+    const RD = 11; // spessore del nastro
+    present.forEach((r) => {
+      const front = pts(r), back = pts(r, RD, -RD);
+      s += `<g class="${anim ? 'fade' : ''}">`
+        + `<polygon points="${P(front)} ${P(back.slice().reverse())}" fill="${COL[r]}" fill-opacity=".30" stroke="${COL[r]}" stroke-opacity=".35" stroke-linejoin="round"/>`
+        + `<polygon points="${f1(front[0][0])},${f1(base)} ${P(front)} ${f1(front[n - 1][0])},${f1(base)}" fill="${COL[r]}" fill-opacity=".10"/>`
+        + `<polyline points="${P(front)}" fill="none" stroke="${COL[r]}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round" filter="url(#glow)"/>`;
+      if (n <= 60) front.forEach(([x, y]) => { s += `<circle cx="${f1(x)}" cy="${f1(y)}" r="4" fill="${COL[r]}"/><circle cx="${f1(x)}" cy="${f1(y)}" r="4" fill="url(#orb)"/>`; });
+      s += '</g>';
+    });
   }
   d.labels.forEach((k, i) => {
-    const x0 = m.l + i * gw + (gw - bw * present.length) / 2;
-    if (chartType === 'bar') present.forEach((r, j) => {
-      const v = sum(rs[r][i]), h = (v / top) * ih;
-      s += `<rect x="${x0 + j * bw}" y="${m.t + ih - h}" width="${Math.max(1, bw - 1)}" height="${h}" rx="2" fill="${COL[r]}"/>`;
-    });
-    if (i % every === 0) s += `<text x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle" font-size="11" fill="var(--muted)">${short(k)}</text>`;
-    s += `<rect data-i="${i}" x="${m.l + i * gw}" y="${m.t}" width="${gw}" height="${ih}" fill="transparent"/>`;
+    if (i % every === 0) s += `<text x="${f1(m.l + i * gw + gw / 2)}" y="${H - 8}" text-anchor="middle" font-size="10.5" fill="var(--muted)">${short(k)}</text>`;
   });
+  s += `<rect id="hl" x="0" y="${m.t - D}" width="${f1(gw)}" height="${ih + D}" fill="rgba(0,229,255,.09)" stroke="rgba(0,229,255,.3)" style="display:none;pointer-events:none"/>`;
+  d.labels.forEach((k, i) => { s += `<rect data-i="${i}" x="${f1(m.l + i * gw)}" y="${m.t - D}" width="${f1(gw)}" height="${ih + D}" fill="transparent"/>`; });
   svg.innerHTML = s;
-  const tip = $('tip');
-  svg.onmousemove = (e) => {
-    const el = e.target.dataset && e.target.dataset.i; if (el === undefined) return (tip.style.display = 'none');
-    const i = +el;
-    tip.innerHTML = `<b>${label(d.labels[i])}</b>` + present.map((r) => `<br>${NAMES[r]}: ${fmt(sum(rs[r][i]))} (↓ ${fmt(rs[r][i][0])} ↑ ${fmt(rs[r][i][1])})`).join('');
-    tip.style.display = 'block';
-    tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = e.clientY + 14 + 'px';
-  };
-  svg.onmouseleave = () => (tip.style.display = 'none');
-}
-function niceStep(x) { const p = Math.pow(10, Math.floor(Math.log10(x || 1))); const f = x / p; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p; }
+  animate = false;
 
-function renderTable(d, roles) {
-  const rs = roleSeries(d);
-  const present = roles.filter((r) => d.interfaces.some((i) => i.role === r));
-  let h = '<thead><tr><th>Periodo</th>' + present.map((r) => `<th class="${r[0]}">${NAMES[r]} ↓ rx</th><th class="${r[0]}">${NAMES[r]} ↑ tx</th><th class="${r[0]}">${NAMES[r]} totale</th>`).join('') + '</tr></thead><tbody>';
+  const tip = $('tip'), hl = $('hl');
+  svg.onmousemove = (e) => {
+    const el = e.target.dataset && e.target.dataset.i;
+    if (el === undefined) { tip.style.display = 'none'; hl.style.display = 'none'; return; }
+    const i = +el;
+    hl.setAttribute('x', f1(m.l + i * gw)); hl.style.display = '';
+    tip.innerHTML = `<b>${label(d.labels[i])}</b>` + present.map((r) => `<br><span style="color:${COL[r]}">■</span> ${NAMES[r]}: ${fmt(sum(rs[r][i]))} <span style="color:var(--muted)">(↓ ${fmt(rs[r][i][0])} ↑ ${fmt(rs[r][i][1])})</span>`).join('');
+    tip.style.display = 'block';
+    tip.style.left = Math.min(e.clientX + 16, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = e.clientY + 16 + 'px';
+  };
+  svg.onmouseleave = () => { tip.style.display = 'none'; hl.style.display = 'none'; };
+}
+
+function renderTable(d) {
+  const rs = roleSeries(d), present = presentRoles(d);
+  let h = '<thead><tr><th>Periodo</th>' + present.map((r) => `<th class="${r[0]}">${NAMES[r]} ↓ rx</th><th class="${r[0]}">${NAMES[r]} ↑ tx</th><th class="${r[0]}">${NAMES[r]} tot</th>`).join('') + '</tr></thead><tbody>';
   for (let i = d.labels.length - 1; i >= 0; i--) {
     h += `<tr><td>${label(d.labels[i])}</td>` + present.map((r) => `<td>${fmt(rs[r][i][0])}</td><td>${fmt(rs[r][i][1])}</td><td><b>${fmt(sum(rs[r][i]))}</b></td>`).join('') + '</tr>';
   }
@@ -179,28 +265,29 @@ async function load() {
     const r = await fetch('/api/stats?period=' + period);
     if (r.status === 409) return (location.href = '/setup.html');
     data = await r.json();
-    const roles = ['wan', 'lan'];
-    renderKpis(data, roles); renderChart(data, roles); renderTable(data, roles);
+    const sys = data.status.system;
+    uptimeBase = sys && sys.seconds != null ? { sec: sys.seconds + Math.max(0, (data.serverTime - sys.fetchedAt) / 1000), at: performance.now() } : null;
+    renderKpis(data); renderChart(data); renderTable(data);
     const s = data.status;
     $('dot').className = 'dot ' + (s.lastError ? 'err' : 'ok');
-    $('st').textContent = s.lastError ? 'Errore: ' + s.lastError : 'Ultima lettura ' + new Date(s.lastPoll || Date.now()).toLocaleTimeString('it-IT');
-  } catch (e) { $('st').textContent = 'Server non raggiungibile'; $('dot').className = 'dot err'; }
+    $('st').textContent = s.lastError ? 'errore: ' + s.lastError : 'ultima lettura ' + new Date(s.lastPoll || Date.now()).toLocaleTimeString('it-IT');
+  } catch (e) { $('st').textContent = 'server non raggiungibile'; $('dot').className = 'dot err'; }
 }
 $('tabs').onclick = (e) => {
   if (!e.target.dataset.p) return;
-  period = e.target.dataset.p;
+  period = e.target.dataset.p; animate = true;
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b === e.target));
   load();
 };
 $('ctype').onclick = (e) => {
   const t = e.target.dataset.t; if (!t) return;
-  chartType = t;
+  chartType = t; animate = true;
   try { localStorage.setItem('chartType', t); } catch {}
-  syncType(); data && renderChart(data, ['wan', 'lan']);
+  syncType(); data && renderChart(data);
 };
 function syncType() { document.querySelectorAll('#ctype button').forEach((b) => b.classList.toggle('on', b.dataset.t === chartType)); }
 syncType();
-addEventListener('resize', () => data && renderChart(data, ['wan', 'lan']));
+addEventListener('resize', () => data && renderChart(data));
 load(); setInterval(load, 30000);
 </script>
 </body>
