@@ -22,7 +22,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/gianfrancodisumma/opnsense-monitor
+          images: ghcr.io/gianfra-dev/opnsense-monitor
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=branch
