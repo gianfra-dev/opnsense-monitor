@@ -22,9 +22,9 @@ main{max-width:1100px;margin:0 auto;padding:8px 16px 48px}
 .kpi .s{font-size:12.5px;color:var(--muted)}
 .kpi.wan{border-top:3px solid var(--wan)}.kpi.lan{border-top:3px solid var(--lan)}
 .bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-.tabs button{font:inherit;padding:6px 14px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
-.tabs button:first-child{border-radius:8px 0 0 8px}.tabs button:last-child{border-radius:0 8px 8px 0}.tabs button+button{border-left:0}
-.tabs button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tabs button,.seg button{font:inherit;padding:6px 14px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}
+.tabs button:first-child,.seg button:first-child{border-radius:8px 0 0 8px}.tabs button:last-child,.seg button:last-child{border-radius:0 8px 8px 0}.tabs button+button,.seg button+button{border-left:0}
+.tabs button.on,.seg button.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .sp{flex:1}
 a.btn{font-size:13px;color:var(--muted);text-decoration:none;border:1px solid var(--line);padding:6px 12px;border-radius:8px;background:var(--card)}
 a.btn:hover{color:var(--fg)}
@@ -56,6 +56,9 @@ th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:6
         <button data-p="hour" class="on">Orario</button><button data-p="day">Giornaliero</button><button data-p="month">Mensile</button>
       </div>
       <span class="sp"></span>
+      <div class="seg" id="ctype" role="group" aria-label="Tipo di grafico">
+        <button data-t="bar" class="on">Colonne</button><button data-t="line">Linee</button>
+      </div>
       <a class="btn" href="/api/export.csv">Esporta CSV</a>
     </div>
     <div class="legend" id="legend"></div>
@@ -71,7 +74,8 @@ th{position:sticky;top:0;background:var(--card);color:var(--muted);font-weight:6
 const $ = (id) => document.getElementById(id);
 const COL = { wan: 'var(--wan)', lan: 'var(--lan)' };
 const NAMES = { wan: 'WAN', lan: 'LAN' };
-let period = 'hour', data = null;
+let period = 'hour', data = null, chartType = 'bar';
+try { if (localStorage.getItem('chartType') === 'line') chartType = 'line'; } catch {}
 
 function fmt(b) {
   if (!b) return '0 B';
@@ -131,9 +135,16 @@ function renderChart(d, roles) {
   }
   const n = d.labels.length, gw = iw / n, bw = Math.max(1, Math.min(28, (gw * 0.8) / present.length));
   const every = Math.ceil(n / Math.max(1, Math.floor(iw / 48)));
+  if (chartType === 'line') {
+    for (const r of present) {
+      const pts = rs[r].map((v, i) => `${(m.l + i * gw + gw / 2).toFixed(1)},${(m.t + ih - (sum(v) / top) * ih).toFixed(1)}`);
+      s += `<polyline points="${pts.join(' ')}" fill="none" stroke="${COL[r]}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+      if (n <= 60) pts.forEach((p) => { const [x, y] = p.split(','); s += `<circle cx="${x}" cy="${y}" r="3" fill="${COL[r]}"/>`; });
+    }
+  }
   d.labels.forEach((k, i) => {
     const x0 = m.l + i * gw + (gw - bw * present.length) / 2;
-    present.forEach((r, j) => {
+    if (chartType === 'bar') present.forEach((r, j) => {
       const v = sum(rs[r][i]), h = (v / top) * ih;
       s += `<rect x="${x0 + j * bw}" y="${m.t + ih - h}" width="${Math.max(1, bw - 1)}" height="${h}" rx="2" fill="${COL[r]}"/>`;
     });
@@ -181,6 +192,14 @@ $('tabs').onclick = (e) => {
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b === e.target));
   load();
 };
+$('ctype').onclick = (e) => {
+  const t = e.target.dataset.t; if (!t) return;
+  chartType = t;
+  try { localStorage.setItem('chartType', t); } catch {}
+  syncType(); data && renderChart(data, ['wan', 'lan']);
+};
+function syncType() { document.querySelectorAll('#ctype button').forEach((b) => b.classList.toggle('on', b.dataset.t === chartType)); }
+syncType();
 addEventListener('resize', () => data && renderChart(data, ['wan', 'lan']));
 load(); setInterval(load, 30000);
 </script>
