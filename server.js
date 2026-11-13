@@ -27,7 +27,7 @@ let config = readJson(CONFIG_FILE, null);
 // stats: { last: {ifaceId: {rx, tx}}, hours: {"YYYY-MM-DD HH": {ifaceId: [rx, tx]}} }
 let stats = readJson(STATS_FILE, { last: {}, hours: {} });
 let dirty = false;
-const status = { lastPoll: null, lastError: null, polling: false };
+const status = { lastPoll: null, lastError: null, polling: false, system: null, systemError: null };
 
 // ---------- OPNsense client ----------
 function normalizeBase(host) {
@@ -80,6 +80,25 @@ async function fetchCounters(cfg) {
   return out;
 }
 
+// Uptime / load from OPNsense (optional: a failure here never breaks traffic polling)
+function parseUptime(v) {
+  if (typeof v === 'number' && isFinite(v)) return v;
+  const m = /(?:(\d+)\s*(?:days?|giorni?|g)\b[,\s]*)?(\d+):(\d{2}):(\d{2})/i.exec(String(v || ''));
+  if (!m) return null;
+  return (+m[1] || 0) * 86400 + +m[2] * 3600 + +m[3] * 60 + +m[4];
+}
+async function fetchSystem(cfg) {
+  const t = await opnRequest(cfg, '/api/diagnostics/system/systemTime');
+  const load = Array.isArray(t.loadavg) ? t.loadavg.join(', ') : (t.loadavg ? String(t.loadavg) : '');
+  return {
+    uptime: String(t.uptime ?? ''),
+    seconds: parseUptime(t.uptime),
+    loadavg: load,
+    boottime: t.boottime ? String(t.boottime) : '',
+    fetchedAt: Date.now(),
+  };
+}
+
 // ---------- collection ----------
 const pad = (n) => String(n).padStart(2, '0');
 function hourKey(d) {
@@ -114,6 +133,8 @@ async function poll() {
     record(counters, new Date());
     status.lastPoll = new Date().toISOString();
     status.lastError = null;
+    try { status.system = await fetchSystem(config); status.systemError = null; }
+    catch (e) { status.system = null; status.systemError = e.message; }
   } catch (e) {
     status.lastError = e.message;
   } finally {
@@ -259,7 +280,7 @@ async function handleApi(req, res, url) {
       return sendJson(res, 200, {
         period, interfaces: config.interfaces, ...series,
         totals: { today: totalsFor(today), month: totalsFor(today.slice(0, 7)), hour: totalsFor(hourKey(now)) },
-        status,
+        status, serverTime: Date.now(),
       });
     }
 

@@ -1,6 +1,6 @@
 # OPNsense Monitor
 
-Dashboard HTML per monitorare i consumi di dati del router OPNsense: totali **orari, giornalieri e mensili**, divisi per **WAN** e **LAN** (ricevuti / inviati). Nessuna dipendenza esterna, nessun CDN.
+Dashboard HTML (tema terminale neon, grafici 3D a colonne o linee) per monitorare i consumi di dati del router OPNsense: totali **orari, giornalieri e mensili**, divisi per **WAN** e **LAN** (ricevuti / inviati). Nessuna dipendenza esterna, nessun CDN.
 
 ## Avvio con Docker
 
@@ -30,5 +30,6 @@ Se il certificato HTTPS del router è autofirmato lascia disattivata la verifica
 - I dati sono in `/data` (volume): `config.json` (contiene il secret, permessi 600) e `stats.json`.
 - Fuso orario: variabile `TZ` (default `Europe/Rome`).
 - Esportazione dei dati orari: `/api/export.csv`.
+- Uptime e load del router: letti da `/api/diagnostics/system/systemTime`. Se l'utente API non ha accesso a quell'endpoint la scheda mostra "n/d" e il resto continua a funzionare.
 
 > La pagina non ha autenticazione: esponila solo nella tua LAN.

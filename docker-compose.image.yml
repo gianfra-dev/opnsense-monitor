@@ -1,7 +1,7 @@
 # Installazione senza clonare il repository: usa l'immagine pubblicata su ghcr.io
 services:
   opnsense-monitor:
-    image: ghcr.io/gianfrancodisumma/opnsense-monitor:latest
+    image: ghcr.io/gianfra-dev/opnsense-monitor:latest
     container_name: opnsense-monitor
     restart: unless-stopped
     ports:

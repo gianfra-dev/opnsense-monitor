@@ -1,0 +1,55 @@
+/* OPNsense Monitor - tema "terminale neon" */
+:root{
+  color-scheme:dark;
+  --bg:#060a12;--bg2:#0a1020;--card:#0d1526;--card2:#111c33;
+  --fg:#d7e3f4;--muted:#6f84a3;--line:#1c2a45;
+  --accent:#00e5ff;--wan:#ffb020;--lan:#00e5ff;--ok:#39ff88;--err:#ff4d6d;
+  --mono:ui-monospace,"JetBrains Mono","Fira Code","SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{background:var(--bg)}
+body{
+  margin:0;color:var(--fg);font:14px/1.55 var(--mono);min-height:100vh;
+  background:
+    radial-gradient(900px 500px at 85% -10%,rgba(0,229,255,.10),transparent 60%),
+    radial-gradient(700px 500px at -10% 10%,rgba(255,176,32,.07),transparent 60%),
+    linear-gradient(rgba(0,229,255,.035) 1px,transparent 1px) 0 0/40px 40px,
+    linear-gradient(90deg,rgba(0,229,255,.035) 1px,transparent 1px) 0 0/40px 40px,
+    var(--bg);
+}
+body::after{ /* scanlines leggere */
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  background:repeating-linear-gradient(transparent 0 2px,rgba(0,0,0,.13) 3px);
+  mix-blend-mode:multiply;
+}
+a{color:var(--accent)}
+code{color:var(--accent)}
+
+/* "lastra" 3D: spessore finto con ombre impilate */
+.slab{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid rgba(0,229,255,.18);border-radius:14px;
+  box-shadow:
+    1px 1px 0 #0a1730,2px 2px 0 #09142a,3px 3px 0 #081126,4px 4px 0 #070e20,5px 5px 0 #060b1a,
+    0 18px 38px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+button,.btn{
+  font:inherit;font-weight:600;cursor:pointer;color:var(--fg);
+  background:linear-gradient(180deg,#14213b,#0d1628);
+  border:1px solid rgba(0,229,255,.25);border-radius:8px;padding:8px 16px;
+  box-shadow:0 3px 0 #060b17,0 6px 14px rgba(0,0,0,.4);
+  transition:transform .08s,box-shadow .08s,border-color .15s,color .15s;
+  text-decoration:none;
+}
+button:hover,.btn:hover{border-color:var(--accent);color:var(--accent)}
+button:active,.btn:active{transform:translateY(2px);box-shadow:0 1px 0 #060b17,0 3px 8px rgba(0,0,0,.4)}
+button.primary{color:#021018;background:linear-gradient(180deg,#38f0ff,#00b8d4);border-color:#7df6ff;box-shadow:0 3px 0 #007a8c,0 6px 18px rgba(0,229,255,.25)}
+button.primary:hover{color:#021018;filter:brightness(1.08)}
+button:disabled{opacity:.5;cursor:default}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
